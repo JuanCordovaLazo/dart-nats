@@ -1,18 +1,18 @@
 # Deprecated
 
+# Dart-NATS
 
-
-# Dart-NATS 
 A Dart client for the [NATS](https://nats.io) messaging system. Design to use with Dart and flutter.
 
-### Flutter Web Support by WebSocket 
+### Flutter Web Support by WebSocket
+
 ```dart
 client.connect(Uri.parse('ws://localhost:80'));
 client.connect(Uri.parse('wss://localhost:443'));
 ```
 
-
 ### Flutter Other Platform Support both TCP Socket and WebSocket
+
 ```dart
 client.connect(Uri.parse('nats://localhost:4222'));
 client.connect(Uri.parse('tls://localhost:4222'));
@@ -20,22 +20,24 @@ client.connect(Uri.parse('ws://localhost:80'));
 client.connect(Uri.parse('wss://localhost:443'));
 ```
 
-### background retry 
+### background retry
+
 ```dart
-  // unawait 
+  // unawait
    client.connect(Uri.parse('nats://localhost:4222'), retry: true, retryCount: -1);
-  
+
   // await for connect if need
    await client.wait4Connected();
 
    // listen to status stream
    client.statusStream.lesten((status){
-    // 
+    //
     print(status);
    });
 ```
 
 ### Turn off retry and catch exception
+
 ```dart
 try {
   await client.connect(Uri.parse('nats://localhost:1234'), retry: false);
@@ -71,6 +73,7 @@ void main() async {
 ## Flutter Examples:
 
 Import and Declare object
+
 ```dart
 import 'package:dart_nats/dart_nats.dart' as nats;
 
@@ -79,15 +82,18 @@ nats.Subscription fooSub, barSub;
 ```
 
 Simply connect to server and subscribe to subject
+
 ```dart
 void connect() {
   natsClient = nats.Client();
-  natsClient.connect(Uri.parse('nats://hostname');
+  natsClient.connect(Uri.parse('nats://hostname'));
   fooSub = natsClient.sub('foo');
   barSub = natsClient.sub('bar');
 }
 ```
+
 Use as Stream in StreamBuilder
+
 ```dart
 StreamBuilder(
   stream: fooSub.stream,
@@ -98,11 +104,13 @@ StreamBuilder(
 ```
 
 Publish Message
+
 ```dart
       await natsClient.pubString('subject','message string');
 ```
 
-Request 
+Request
+
 ```dart
 var client = Client();
 client.inboxPrefix = '_INBOX.test_test';
@@ -111,7 +119,8 @@ var receive = await client.request(
     'service', Uint8List.fromList('request'.codeUnits));
 ```
 
-Structure Request 
+Structure Request
+
 ```dart
 var client = Client();
 await client.connect(Uri.parse('nats://localhost:4222'));
@@ -125,7 +134,8 @@ Student json2Student(String json) {
 }
 ```
 
-Dispose 
+Dispose
+
 ```dart
   void dispose() {
     natsClient.close();
@@ -135,7 +145,8 @@ Dispose
 
 ## Authentication
 
-Token Authtication 
+Token Authtication
+
 ```dart
 var client = Client();
 client.connect(Uri.parse('nats://localhost'),
@@ -143,6 +154,7 @@ client.connect(Uri.parse('nats://localhost'),
 ```
 
 User/Passwore Authentication
+
 ```dart
 var client = Client();
 client.connect(Uri.parse('nats://localhost'),
@@ -150,6 +162,7 @@ client.connect(Uri.parse('nats://localhost'),
 ```
 
 NKEY Authentication
+
 ```dart
 var client = Client();
 client.seed =
@@ -163,6 +176,7 @@ client.connect(
 ```
 
 JWT Authentication
+
 ```dart
 var client = Client();
 client.seed =
@@ -176,14 +190,71 @@ client.connect(
 );
 ```
 
-
-
-
 Full Flutter sample code [example/flutter/main.dart](https://github.com/chartchuo/dart-nats/blob/master/example/flutter/main_dart)
 
+## JetStream Support
+
+This package now includes full JetStream support for message persistence and streaming!
+
+### Quick JetStream Example
+
+```dart
+import 'package:dart_nats/dart_nats.dart';
+
+void main() async {
+  final client = Client();
+  await client.connect(Uri.parse('nats://localhost:4222'));
+
+  // Get JetStream context
+  final js = client.jetStream();
+
+  // Create a stream
+  await js.manager.addStream(StreamConfig(
+    name: 'ORDERS',
+    subjects: ['orders.>'],
+  ));
+
+  // Publish with acknowledgment
+  final ack = await js.publishString('orders.new', 'Order 1');
+  print('Published: seq=${ack.seq}');
+
+  // Create a pull consumer and fetch messages
+  final consumer = await js.pullSubscribe('ORDERS', ConsumerConfig(
+    durable: 'MY_CONSUMER',
+    ackPolicy: AckPolicy.explicit,
+  ));
+
+  final messages = await consumer.fetch(batch: 10);
+  for (var msg in messages) {
+    print('Received: ${msg.string}');
+    await js.ack(msg);
+  }
+
+  await client.close();
+}
+```
+
+For complete JetStream documentation, see [docs/JETSTREAM.md](docs/JETSTREAM.md)
+
+For a full working example, see [example/jetstream_example.dart](example/jetstream_example.dart)
+
+### JetStream Features
+
+- ✅ Stream management (create, update, delete, list)
+- ✅ Consumer management (pull and push consumers)
+- ✅ Message publishing with acknowledgments
+- ✅ Message deduplication
+- ✅ Pull-based subscription with batching
+- ✅ Push-based subscription with real-time delivery
+- ✅ Multiple acknowledgment modes (ack, nak, in-progress, term)
+- ✅ Message metadata and tracking
+- ✅ Configurable retention policies
+- ✅ Delivery policies (all, last, new, by sequence, by time)
+- ✅ Work queue and interest-based retention
 
 ## Features
-The following is a list of features currently supported: 
+
+The following is a list of features currently supported:
 
 - [x] - Publish
 - [x] - Subscribe, unsubscribe
@@ -193,11 +264,15 @@ The following is a list of features currently supported:
 - [x] - Request, Respond
 - [x] - Queue subscribe
 - [x] - Request timeout
-- [x] - Events/status 
+- [x] - Events/status
 - [x] - Buffering message during reconnect atempts
 - [x] - All authentication models, including NATS 2.0 JWT and nkey
-- [x] - NATS 2.x 
-- [x] - TLS 
+- [x] - NATS 2.x
+- [x] - TLS
+- [x] - **JetStream** (streams, consumers, persistence)
 
 Planned:
+
 - [ ] - Connect to list of servers
+- [ ] - JetStream Key-Value Store
+- [ ] - JetStream Object Store

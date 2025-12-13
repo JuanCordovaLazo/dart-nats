@@ -8,6 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'common.dart';
 import 'inbox.dart';
+import 'jetstream_context.dart';
 import 'message.dart';
 import 'nkeys.dart';
 import 'subscription.dart';
@@ -617,7 +618,8 @@ class Client {
   ///publish by string
   Future<bool> pubString(String subject, String str,
       {String? replyTo, bool buffer = true, Header? header}) async {
-    return pub(subject, Uint8List.fromList(utf8.encode(str)), replyTo: replyTo, buffer: buffer);
+    return pub(subject, Uint8List.fromList(utf8.encode(str)),
+        replyTo: replyTo, buffer: buffer);
   }
 
   Future<bool> _pub(_Pub p) async {
@@ -710,9 +712,9 @@ class Client {
   }
 
   void _add(String str) {
-     if (status == Status.closed || status == Status.disconnected) {
+    if (status == Status.closed || status == Status.disconnected) {
       return;
-     }
+    }
     if (_wsChannel != null) {
       // if (_wsChannel?.closeCode == null) return;
       _wsChannel?.sink.add(utf8.encode(str + '\r\n'));
@@ -907,5 +909,19 @@ class Client {
         break;
       }
     }
+  }
+
+  /// Get JetStream context for JetStream operations
+  ///
+  /// Example:
+  /// ```dart
+  /// final js = client.jetStream();
+  /// await js.publish('subject', [1, 2, 3]);
+  /// ```
+  JetStreamContext jetStream({
+    String apiPrefix = r'$JS.API',
+    Duration timeout = const Duration(seconds: 5),
+  }) {
+    return JetStreamContext(this, apiPrefix: apiPrefix, timeout: timeout);
   }
 }

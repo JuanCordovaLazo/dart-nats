@@ -62,3 +62,15 @@ services:
       - ./test/config:/config
     command: "-V -D -c /config/wss.cfg --tls --tlscert=/config/server-cert.pem --tlskey=/config/server-key.pem"
 
+  nats-jetstream:
+    image: nats
+    ports:
+      - "4228:4222"
+      - "8087:8080"
+    volumes:
+      - nats-jetstream-data:/data
+      - ./test/config:/config
+    command: "-V -D -c /config/websocket.cfg -js -sd /data"
+
+volumes:
+  nats-jetstream-data:
