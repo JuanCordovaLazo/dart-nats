@@ -60,7 +60,8 @@ services:
       - "8443:443"
     volumes:
       - ./test/config:/config
-    command: "-V -D -c /config/wss.cfg --tls --tlscert=/config/server-cert.pem --tlskey=/config/server-key.pem"
+    command: "-V -D -c /config/wss.cfg --tls --tlscert=/config/server-cert.pem
+      --tlskey=/config/server-key.pem"
 
   nats-jetstream:
     image: nats
@@ -72,5 +73,15 @@ services:
       - ./test/config:/config
     command: "-V -D -c /config/websocket.cfg -js -sd /data"
 
+  nats-nui:
+    image: ghcr.io/nats-nui/nui:latest
+    ports:
+      - "3002:31311"
+    volumes:
+      - nats-nui-data:/db
+    depends_on:
+      - nats-jetstream
+
 volumes:
   nats-jetstream-data:
+  nats-nui-data:
