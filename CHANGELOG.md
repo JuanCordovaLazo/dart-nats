@@ -1,6 +1,6 @@
-## Unreleased
+## 1.1.2
 
-* Fix `JetStream.accountInfo()` returning an all-zero `Tier` (memory/storage/streams/consumers all 0) for single-tier (non-multi-tenant) accounts — the common case. `AccountInfo.fromJson` was reading usage/limits from a nested `tier` key that a real server's `$JS.API.INFO` response never sends; those fields are at the top level. `Tier.fromJson` now also parses `memory`/`storage`/etc as `num` rather than `int`, since an unset `reserved_storage` limit can arrive as a uint64 `-1` sentinel that round-trips through JSON as a double too large for a direct `int` cast.
+* Fix `JetStream.accountInfo()` returning all-zero `Tier` for single-tier accounts by parsing usage fields from the top-level response instead of a nonexistent nested `tier` key. Also fix `Tier.fromJson` crash on uint64 sentinel values by reading fields as `num`. Thanks [nverbeek](https://github.com/nverbeek) for the contribution.
 
 ## 1.1.1
 
