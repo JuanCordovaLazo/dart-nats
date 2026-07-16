@@ -4,6 +4,7 @@
 * Add client-side service discovery for the ADR-32 Microservices framework, complementing the `addService`/`MicroService` hosting side:
   * `Client.discoverServices()`, `getServicesInfo()`, and `getServicesStats()` fan a request out to `$SRV.*` (optionally scoped to service name and ID) and collect all replies within a bounded timeout window.
   * Adds `PingResponse`, `InfoResponse`, `EndpointInfo`, `StatsResponse`, and `EndpointStatsInfo` to parse standard response payloads.
+  * Thanks [nverbeek](https://github.com/nverbeek) for the contribution.
 
 ## 1.1.2
 
