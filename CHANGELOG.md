@@ -1,6 +1,9 @@
-## Unreleased
+## 1.2.0
 
-* Add client-side service discovery for the ADR-32 Microservices framework, complementing the recently-added `addService`/`MicroService`. `Client.discoverServices()`/`getServicesInfo()`/`getServicesStats()` fan a `$SRV.PING`/`INFO`/`STATS` request out to `$SRV.*` (optionally scoped to one service name, or one service+instance id) and collect every reply that arrives within a bounded window, since multiple instances can legitimately reply to a single discovery request (unlike `Client.request()`'s single-reply semantics). Adds `PingResponse`/`InfoResponse`/`EndpointInfo`/`StatsResponse`/`EndpointStatsInfo` to parse the standard `io.nats.micro.v1.*_response` payloads.
+* Add heartbeats, clustering, robust reconnection, buffer limits, pull flow control, and NATS Microservices Framework (ADR-32).
+* Add client-side service discovery for the ADR-32 Microservices framework, complementing the `addService`/`MicroService` hosting side:
+  * `Client.discoverServices()`, `getServicesInfo()`, and `getServicesStats()` fan a request out to `$SRV.*` (optionally scoped to service name and ID) and collect all replies within a bounded timeout window.
+  * Adds `PingResponse`, `InfoResponse`, `EndpointInfo`, `StatsResponse`, and `EndpointStatsInfo` to parse standard response payloads.
 
 ## 1.1.2
 
