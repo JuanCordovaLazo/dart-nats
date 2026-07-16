@@ -1,4 +1,6 @@
-## Unreleased
+## 1.2.1
+
+* Start new development cycle.
 
 ## 1.2.0
 
