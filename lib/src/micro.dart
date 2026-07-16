@@ -189,14 +189,17 @@ class MicroService {
                 .toList(),
           }));
         } else if (subName.contains('STATS')) {
+          final endpointsList = _stats.values.map((s) => s.toJson()).toList();
           msg.respondString(jsonEncode({
             'id': id,
             'name': config.name,
             'version': config.version,
             'type': 'io.nats.micro.v1.stats_response',
             'started': started.toIso8601String(),
+            'metadata': config.metadata ?? {},
+            'endpoints': endpointsList,
             'stats': {
-              'endpoints': _stats.values.map((s) => s.toJson()).toList(),
+              'endpoints': endpointsList,
             }
           }));
         }
@@ -397,6 +400,9 @@ class StatsResponse {
   /// When this service instance started
   final DateTime started;
 
+  /// Service metadata
+  final Map<String, String> metadata;
+
   /// Per-endpoint statistics
   final List<EndpointStatsInfo> endpoints;
 
@@ -406,18 +412,27 @@ class StatsResponse {
     required this.name,
     required this.version,
     required this.started,
+    this.metadata = const {},
     this.endpoints = const [],
   });
 
   /// Parse from a decoded JSON map
   factory StatsResponse.fromJson(Map<String, dynamic> json) {
-    final stats = json['stats'] as Map<String, dynamic>? ?? const {};
+    var endpointsList = json['endpoints'] as List?;
+    if (endpointsList == null) {
+      final stats = json['stats'] as Map<String, dynamic>?;
+      if (stats != null) {
+        endpointsList = stats['endpoints'] as List?;
+      }
+    }
     return StatsResponse(
       id: json['id'] as String,
       name: json['name'] as String,
       version: json['version'] as String,
       started: DateTime.parse(json['started'] as String),
-      endpoints: (stats['endpoints'] as List? ?? const [])
+      metadata:
+          (json['metadata'] as Map?)?.cast<String, String>() ?? const {},
+      endpoints: (endpointsList ?? const [])
           .map((e) => EndpointStatsInfo.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
@@ -440,6 +455,11 @@ extension ClientServiceDiscoveryExtension on Client {
     String? id,
     required Duration timeout,
   }) async {
+    if (id != null && name == null) {
+      throw ArgumentError(
+          'Cannot target a specific service instance by ID without specifying the service name.');
+    }
+
     var subject = '\$SRV.$verb';
     if (name != null) {
       subject += '.$name';

@@ -626,6 +626,7 @@ SUACSSL3UAHUDXKFSNVUZRF5UHPMWZ6BFDTJ7M6USDXIEDNPPQYYYCU3VY
         name: 'discovery-detail-service',
         version: '2.1.0',
         description: 'Discovery detail test service',
+        metadata: {'region': 'us-west-1'},
         endpoints: [
           Endpoint(
             name: 'echo',
@@ -652,10 +653,17 @@ SUACSSL3UAHUDXKFSNVUZRF5UHPMWZ6BFDTJ7M6USDXIEDNPPQYYYCU3VY
       final statsReplies =
           await client.getServicesStats(name: 'discovery-detail-service');
       expect(statsReplies.length, equals(1));
+      expect(statsReplies.single.metadata['region'], equals('us-west-1'));
       final epStats = statsReplies.single.endpoints.single;
       expect(epStats.name, equals('echo'));
       expect(epStats.numRequests, equals(1));
       expect(epStats.numErrors, equals(0));
+
+      // Check id-without-name argument validation
+      expect(
+        () => client.discoverServices(id: 'some-id'),
+        throwsArgumentError,
+      );
 
       await service.stop();
       await client.close();
