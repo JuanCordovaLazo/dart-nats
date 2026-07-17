@@ -322,20 +322,37 @@ class KeyValue {
       filterSubject: '\$KV.$bucket.$key',
       deliverPolicy: includeHistory ? 'all' : 'last',
       ackPolicy: 'none',
+      // Safety net if `onCancel`'s own deleteConsumer below never runs
+      // (e.g. the client vanishes uncleanly instead of cancelling the
+      // stream) -- without this, an ephemeral consumer with no durable
+      // name and no inactivity threshold is never reaped by the server on
+      // its own and leaks indefinitely.
+      inactiveThreshold: const Duration(minutes: 5),
     );
 
+    Consumer<dynamic>? ephemeralConsumer;
     client
         .jetStream()
         .createConsumer(streamName, consumerConfig)
+        .then((consumer) => ephemeralConsumer = consumer)
         .catchError((dynamic err) {
       controller.addError(err);
       controller.close();
       throw err;
     });
 
-    controller.onCancel = () {
+    controller.onCancel = () async {
       streamSub.cancel();
       client.unSub(sub);
+      final consumer = ephemeralConsumer;
+      if (consumer != null) {
+        try {
+          await client.jetStream().deleteConsumer(streamName, consumer.name);
+        } catch (_) {
+          // Best-effort: the inactiveThreshold above still reaps it
+          // eventually if this fails (e.g. already disconnected).
+        }
+      }
     };
 
     return controller.stream;
@@ -387,17 +404,28 @@ class KeyValue {
       filterSubject: '\$KV.$bucket.>',
       deliverPolicy: 'all',
       ackPolicy: 'none',
+      // Safety net if cleanup()'s own deleteConsumer call below never runs.
+      inactiveThreshold: const Duration(minutes: 5),
     );
 
     final activeKeys = <String, bool>{}; // key -> is_active
     final completer = Completer<List<String>>();
     StreamSubscription? streamSub;
     Timer? timeoutTimer;
+    Consumer<dynamic>? ephemeralConsumer;
 
     void cleanup() {
       timeoutTimer?.cancel();
       streamSub?.cancel();
       client.unSub(sub);
+      final consumer = ephemeralConsumer;
+      if (consumer != null) {
+        ephemeralConsumer = null;
+        client
+            .jetStream()
+            .deleteConsumer(streamName, consumer.name)
+            .catchError((_) => false);
+      }
     }
 
     timeoutTimer = Timer(timeout, () {
@@ -459,7 +487,8 @@ class KeyValue {
     });
 
     try {
-      await client.jetStream().createConsumer(streamName, consumerConfig);
+      ephemeralConsumer =
+          await client.jetStream().createConsumer(streamName, consumerConfig);
     } catch (e) {
       cleanup();
       if (!completer.isCompleted) {
@@ -480,6 +509,7 @@ class KeyValue {
 
     StreamSubscription? streamSub;
     Timer? timeoutTimer;
+    Consumer<dynamic>? ephemeralConsumer;
 
     void cleanup() {
       timeoutTimer?.cancel();
@@ -487,6 +517,14 @@ class KeyValue {
       client.unSub(sub);
       if (!controller.isClosed) {
         controller.close();
+      }
+      final consumer = ephemeralConsumer;
+      if (consumer != null) {
+        ephemeralConsumer = null;
+        client
+            .jetStream()
+            .deleteConsumer(streamName, consumer.name)
+            .catchError((_) => false);
       }
     }
 
@@ -552,7 +590,11 @@ class KeyValue {
               filterSubject: '\$KV.$bucket.$key',
               deliverPolicy: 'all',
               ackPolicy: 'none',
+              // Safety net if cleanup()'s own deleteConsumer call above
+              // never runs.
+              inactiveThreshold: const Duration(minutes: 5),
             ))
+        .then((consumer) => ephemeralConsumer = consumer)
         .catchError((dynamic err) {
       controller.addError(err);
       cleanup();

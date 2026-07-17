@@ -175,6 +175,14 @@ class ConsumerConfig {
   /// Idle heartbeat duration
   final Duration? idleHeartbeat;
 
+  /// How long the server waits with no interest (no pull requests, no
+  /// connected push subscriber) before automatically deleting this
+  /// consumer. Chiefly useful as a safety net for ephemeral consumers: if
+  /// the owning client vanishes uncleanly (crash, network drop) without
+  /// ever calling `deleteConsumer`, the server reaps it on its own instead
+  /// of leaving it orphaned indefinitely.
+  final Duration? inactiveThreshold;
+
   /// Constructor for ConsumerConfig
   ConsumerConfig({
     this.durable,
@@ -185,6 +193,7 @@ class ConsumerConfig {
     this.optStartSeq,
     this.flowControl,
     this.idleHeartbeat,
+    this.inactiveThreshold,
   });
 
   /// Export configuration to JSON map
@@ -201,6 +210,10 @@ class ConsumerConfig {
     if (idleHeartbeat != null) {
       map['idle_heartbeat'] =
           idleHeartbeat!.inMicroseconds * 1000; // in nanoseconds
+    }
+    if (inactiveThreshold != null) {
+      map['inactive_threshold'] =
+          inactiveThreshold!.inMicroseconds * 1000; // in nanoseconds
     }
     return map;
   }
