@@ -24,7 +24,7 @@ Add `dart_nats` to your `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  dart_nats: ^1.1.1
+  dart_nats: ^1.2.2
 ```
 
 ### 2. Import the Package
