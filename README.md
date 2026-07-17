@@ -76,6 +76,10 @@ client.connect(
 await client.wait4Connected(); // Or client.waitUntilConnected();
 ```
 
+After a successful connection, if the network drops (for example airplane mode), the client keeps retrying in the background while status is `reconnecting`, waiting `retryInterval` between failed attempts. With `retryCount: -1` it retries until the connection succeeds or you call `close()` / `forceClose()`. Finite `retryCount` stops after the attempt budget and leaves a terminal non-`reconnecting` state. Heartbeats (`pingInterval` / `maxPingsOut`) detect silent stalls separately; they do not replace this reconnect loop.
+
+Core `sub()` subscriptions are re-bound automatically on reconnect success. JetStream KV watches must be re-opened by the application on `onReconnect` or `Status.connected`.
+
 ### 3. Monitoring Connection Status
 You can listen to connection status changes through the `statusStream`. This is ideal for updating Flutter UI overlays when the network drops:
 
@@ -107,11 +111,13 @@ client.statusStream.listen((status) {
 Alternatively, you can register connection lifecycle callbacks:
 
 ```dart
-client.onConnect = () => print('Connected');
+client.onConnect = () => print('Connected');       // Initial connect only
 client.onDisconnect = () => print('Disconnected');
-client.onReconnect = () => print('Reconnected');
+client.onReconnect = () => print('Reconnected');   // Background reconnect success
 client.onClose = () => print('Connection Closed');
 ```
+
+**Manual acceptance (mobile):** With `retry: true` and `retryCount: -1`, toggle airplane mode OFF→ON on an Android emulator; the client should return to `Status.connected` within a few seconds.
 
 ### 5. Disconnection & Draining
 * `close()`: Immediately shuts down the connection and cleans up memory.
