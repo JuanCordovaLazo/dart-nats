@@ -6,6 +6,26 @@ import 'package:test/test.dart';
 /// `createConsumer()` returned and never deleted it once the caller
 /// cancelled/finished -- every call left a server-side consumer behind
 /// forever. Confirms all three now clean up after themselves.
+///
+/// Waits for the empty-consumer-list outcome by polling rather than a
+/// single fixed sleep: deleteConsumer() lands asynchronously (fire-and-
+/// forget in cleanup()), and `history()`/`keys()` can fall back to their
+/// own pre-existing 5s timeoutTimer when their pending-count-reaches-zero
+/// fast path doesn't fire, so a fixed short wait is flaky under load.
+Future<void> expectEventuallyNoConsumers(JetStream js, String streamName,
+    {Duration timeout = const Duration(seconds: 15)}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (true) {
+    final consumers = await js.listConsumers(streamName);
+    if (consumers.isEmpty) return;
+    if (DateTime.now().isAfter(deadline)) {
+      fail('expected no consumers on $streamName, still have '
+          '${consumers.map((c) => c.name).toList()} after $timeout');
+    }
+    await Future.delayed(const Duration(milliseconds: 250));
+  }
+}
+
 void main() {
   group('KeyValue ephemeral consumer cleanup', () {
     late Client client;
@@ -40,11 +60,7 @@ void main() {
       expect(duringWatch, isNotEmpty);
 
       await sub.cancel();
-      // deleteConsumer() runs inside onCancel; give it a moment to land.
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      final afterCancel = await js.listConsumers(streamName);
-      expect(afterCancel, isEmpty);
+      await expectEventuallyNoConsumers(js, streamName);
     });
 
     test('history() deletes its ephemeral consumer once exhausted', () async {
@@ -55,14 +71,7 @@ void main() {
       final entries = await kv.history('k').toList();
       expect(entries.length, equals(2));
 
-      // history()'s pending-count-reaches-zero fast path isn't always
-      // reliable (same as keys(), below), so cleanup() can fall back to
-      // its pre-existing 5s timeoutTimer -- wait past that worst case
-      // rather than assume the fast path fired.
-      await Future.delayed(const Duration(seconds: 6));
-
-      final consumers = await js.listConsumers(streamName);
-      expect(consumers, isEmpty);
+      await expectEventuallyNoConsumers(js, streamName);
     });
 
     test('keys() deletes its ephemeral consumer once done', () async {
@@ -73,14 +82,7 @@ void main() {
       final keys = await kv.keys();
       expect(keys, containsAll(['a', 'b']));
 
-      // keys()'s own pending-count-reaches-zero fast path doesn't always
-      // fire for a small result set, so cleanup() falls back to its
-      // pre-existing 5s timeoutTimer -- unrelated to the consumer-leak fix
-      // under test here, just something to wait past.
-      await Future.delayed(const Duration(seconds: 6));
-
-      final consumers = await js.listConsumers(streamName);
-      expect(consumers, isEmpty);
+      await expectEventuallyNoConsumers(js, streamName);
     });
   });
 }

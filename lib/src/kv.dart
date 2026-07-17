@@ -330,18 +330,34 @@ class KeyValue {
       inactiveThreshold: const Duration(minutes: 5),
     );
 
+    // Guards against a race between this create() call landing and the
+    // caller cancelling almost immediately: if onCancel runs first, it has
+    // no consumer name yet to delete, and nothing would call it a second
+    // time once create() finally resolves -- `cancelled` lets the create()
+    // continuation notice that and delete the consumer itself instead of
+    // leaking it for the full inactiveThreshold window.
     Consumer<dynamic>? ephemeralConsumer;
+    bool cancelled = false;
     client
         .jetStream()
         .createConsumer(streamName, consumerConfig)
-        .then((consumer) => ephemeralConsumer = consumer)
-        .catchError((dynamic err) {
+        .then((consumer) {
+      if (cancelled) {
+        client
+            .jetStream()
+            .deleteConsumer(streamName, consumer.name)
+            .catchError((_) => false);
+      } else {
+        ephemeralConsumer = consumer;
+      }
+    }).catchError((dynamic err) {
       controller.addError(err);
       controller.close();
       throw err;
     });
 
     controller.onCancel = () async {
+      cancelled = true;
       streamSub.cancel();
       client.unSub(sub);
       final consumer = ephemeralConsumer;
@@ -413,14 +429,23 @@ class KeyValue {
     StreamSubscription? streamSub;
     Timer? timeoutTimer;
     Consumer<dynamic>? ephemeralConsumer;
+    // Guards against cleanup() running (via the pending-count-reaches-zero
+    // fast path below, which can win the race against createConsumer()'s
+    // own reply on a small/already-delivered result set) before
+    // ephemeralConsumer is set -- without this, cleanup() would have
+    // nothing to delete yet, and nothing would call it a second time once
+    // createConsumer() finally resolves, leaking the consumer for the full
+    // inactiveThreshold window instead of deleting it immediately.
+    bool cleanedUp = false;
 
     void cleanup() {
+      if (cleanedUp) return;
+      cleanedUp = true;
       timeoutTimer?.cancel();
       streamSub?.cancel();
       client.unSub(sub);
       final consumer = ephemeralConsumer;
       if (consumer != null) {
-        ephemeralConsumer = null;
         client
             .jetStream()
             .deleteConsumer(streamName, consumer.name)
@@ -487,8 +512,16 @@ class KeyValue {
     });
 
     try {
-      ephemeralConsumer =
+      final consumer =
           await client.jetStream().createConsumer(streamName, consumerConfig);
+      if (cleanedUp) {
+        client
+            .jetStream()
+            .deleteConsumer(streamName, consumer.name)
+            .catchError((_) => false);
+      } else {
+        ephemeralConsumer = consumer;
+      }
     } catch (e) {
       cleanup();
       if (!completer.isCompleted) {
@@ -510,8 +543,17 @@ class KeyValue {
     StreamSubscription? streamSub;
     Timer? timeoutTimer;
     Consumer<dynamic>? ephemeralConsumer;
+    // Guards against cleanup() running (e.g. via the pending-count-reaches-
+    // zero fast path below) before createConsumer()'s reply has landed and
+    // ephemeralConsumer is set -- without this, cleanup() would have
+    // nothing to delete yet, and nothing would call it a second time once
+    // the reply finally arrives, leaking the consumer for the full
+    // inactiveThreshold window instead of deleting it immediately.
+    bool cleanedUp = false;
 
     void cleanup() {
+      if (cleanedUp) return;
+      cleanedUp = true;
       timeoutTimer?.cancel();
       streamSub?.cancel();
       client.unSub(sub);
@@ -520,7 +562,6 @@ class KeyValue {
       }
       final consumer = ephemeralConsumer;
       if (consumer != null) {
-        ephemeralConsumer = null;
         client
             .jetStream()
             .deleteConsumer(streamName, consumer.name)
@@ -594,8 +635,16 @@ class KeyValue {
               // never runs.
               inactiveThreshold: const Duration(minutes: 5),
             ))
-        .then((consumer) => ephemeralConsumer = consumer)
-        .catchError((dynamic err) {
+        .then((consumer) {
+      if (cleanedUp) {
+        client
+            .jetStream()
+            .deleteConsumer(streamName, consumer.name)
+            .catchError((_) => false);
+      } else {
+        ephemeralConsumer = consumer;
+      }
+    }).catchError((dynamic err) {
       controller.addError(err);
       cleanup();
       throw err;
