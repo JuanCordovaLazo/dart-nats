@@ -1,3 +1,10 @@
+## Unreleased
+
+* Fix `JetStream.listStreams()`/`listConsumers()` silently truncating at the server's page size (256 items) instead of paginating via `offset`/`total` — accounts with more streams/consumers than that lost visibility into everything past the first page, with no error or truncation flag.
+* Fix `Consumer.messages()`'s pull loop and `OrderedConsumer` swallowing every delivery failure into a silent retry loop instead of surfacing it through the stream's `addError`. For pull consumers specifically, a deleted server-side consumer never actually threw from `fetch()` — it silently timed out with an empty batch, indistinguishable from a merely idle consumer — so the loop now also confirms the consumer still exists whenever a batch comes back empty.
+* Fix `KeyValue.watch()`/`history()`/`keys()` leaking their ephemeral push consumer on every call — the `Consumer` returned by `createConsumer()` was discarded and never deleted once the caller cancelled or the call finished. `ConsumerConfig` also gains an `inactiveThreshold` field (serialized as `inactive_threshold`, same convention as `idleHeartbeat`) so ephemeral consumers can be given a server-side reap window as a safety net.
+* Add `Message.nakSync()`/`termSync()`/`inProgressSync()`, awaitable twins of the existing `ackSync()` for `nak()`/`term()`/`inProgress()`. The originals call `pub()` without awaiting its own `Future<bool>`, so a disconnected client still reports success even though the ack/nak/term never reached the server — prefer the `*Sync` variants when that needs to be known.
+
 ## 1.2.1
 
 * Update README.md with Microservices Framework (ADR-32) and Client Discovery documentation.
