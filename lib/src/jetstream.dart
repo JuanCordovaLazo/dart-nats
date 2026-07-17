@@ -1150,7 +1150,13 @@ class OrderedConsumer {
         // Wait until consumer resets or closes
         await completer.future;
       } catch (e) {
-        // Wait before retrying
+        // Surface the failure to listeners (e.g. createConsumer rejected the
+        // config -- a workqueue-retention stream requires explicit ack,
+        // for example) instead of retrying silently forever, then back off
+        // to avoid a tight loop.
+        if (_controller != null && !_controller!.isClosed) {
+          _controller!.addError(e);
+        }
         await Future.delayed(const Duration(seconds: 1));
       }
     }
@@ -1253,12 +1259,27 @@ class Consumer<T> {
         }
         try {
           final msgs = await fetch(batch: batch, timeout: timeout);
+          if (msgs.isEmpty) {
+            // An empty batch is the normal "nothing new yet" outcome, but
+            // it's also indistinguishable from a consumer that was deleted
+            // server-side: the pull request has no responder left to answer
+            // it, so it silently times out with no error and no status
+            // message either, exactly like a healthy idle consumer would.
+            // Disambiguate by confirming the consumer still exists whenever
+            // a batch comes back empty, so a deleted consumer is detected
+            // within one fetch cycle instead of polling forever with
+            // nothing ever surfaced.
+            await info(timeout: timeout);
+          }
           for (final msg in msgs) {
             if (!active || controller.isClosed) break;
             controller.add(msg);
           }
         } catch (e) {
-          // Avoid tight loop if fetch throws
+          // Surface the failure to listeners (e.g. the consumer was deleted
+          // server-side) instead of retrying silently forever, then back off
+          // to avoid a tight loop.
+          if (!controller.isClosed) controller.addError(e);
           await Future.delayed(const Duration(seconds: 1));
         }
       }
